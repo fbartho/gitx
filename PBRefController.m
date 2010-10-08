@@ -60,11 +60,12 @@
 	else
 		description = [NSString stringWithFormat:@"Push updates to remote %@", [remoteRef remoteName]];
 
+    NSString * sdesc = [NSString stringWithFormat:@"p%@", [description substringFromIndex:1]]; 
 	NSAlert *alert = [NSAlert alertWithMessageText:description
 									 defaultButton:@"Push"
 								   alternateButton:@"Cancel"
 									   otherButton:nil
-						 informativeTextWithFormat:@"Are you sure you want to %@?", description];
+						 informativeTextWithFormat:@"Are you sure you want to %@?", sdesc];
 
 	NSMutableDictionary *info = [NSMutableDictionary dictionary];
 	if (ref)
@@ -146,9 +147,8 @@
 - (void) rebaseHeadBranch:(PBRefMenuItem *)sender
 {
 	id <PBGitRefish> refish = [sender refish];
-	PBGitRef *headRef = [[historyController.repository headRef] ref];
 
-	[historyController.repository rebaseBranch:headRef onRefish:refish];
+	[historyController.repository rebaseBranch:nil onRefish:refish];
 }
 
 
@@ -274,6 +274,15 @@
 	return [PBRefMenuItem defaultMenuItemsForCommit:commit target:self];
 }
 
+- (NSArray *)menuItemsForRow:(NSInteger)rowIndex
+{
+	NSArray *commits = [commitController arrangedObjects];
+	if ([commits count] <= rowIndex)
+		return nil;
+
+	return [self menuItemsForCommit:[commits objectAtIndex:rowIndex]];
+}
+
 
 # pragma mark Tableview delegate methods
 
@@ -292,6 +301,13 @@
 	int index = [cell indexAtX:(location.x - cellFrame.origin.x)];
 	
 	if (index == -1)
+		return NO;
+
+	PBGitRef *ref = [[[cell objectValue] refs] objectAtIndex:index];
+	if ([ref isTag] || [ref isRemoteBranch])
+		return NO;
+
+	if ([[[historyController.repository headRef] ref] isEqualToRef:ref])
 		return NO;
 	
 	NSData *data = [NSKeyedArchiver archivedDataWithRootObject:[NSArray arrayWithObjects:[NSNumber numberWithInt:row], [NSNumber numberWithInt:index], NULL]];

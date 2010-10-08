@@ -7,6 +7,7 @@
 //
 
 #import "PBGitHistoryController.h"
+#import "PBWebHistoryController.h"
 #import "CWQuickLook.h"
 #import "PBGitGrapher.h"
 #import "PBGitRevisionCell.h"
@@ -19,7 +20,9 @@
 #import "PBDiffWindowController.h"
 #import "PBGitDefaults.h"
 #import "PBGitRevList.h"
+#import "PBHistorySearchController.h"
 #define QLPreviewPanel NSClassFromString(@"QLPreviewPanel")
+#import "PBQLTextView.h"
 
 
 #define kHistorySelectedDetailIndexKey @"PBHistorySelectedDetailIndex"
@@ -37,6 +40,8 @@
 
 @implementation PBGitHistoryController
 @synthesize selectedCommitDetailsIndex, webCommit, gitTree, commitController, refController;
+@synthesize searchController;
+@synthesize commitList;
 
 - (void)awakeFromNib
 {
@@ -47,9 +52,9 @@
 	[treeController addObserver:self forKeyPath:@"selection" options:0 context:@"treeChange"];
 
 	[repository.revisionList addObserver:self forKeyPath:@"isUpdating" options:0 context:@"revisionListUpdating"];
-	[repository.revisionList addObserver:self forKeyPath:@"updatedGraph" options:0 context:@"revisionListUpdatedGraph"];
 	[repository addObserver:self forKeyPath:@"currentBranch" options:0 context:@"branchChange"];
 	[repository addObserver:self forKeyPath:@"refs" options:0 context:@"updateRefs"];
+	[repository addObserver:self forKeyPath:@"currentBranchFilter" options:0 context:@"branchFilterChange"];
 
 	forceSelectionUpdate = YES;
 	NSSize cellSpacing = [commitList intercellSpacing];
@@ -67,7 +72,7 @@
 
 	// Set a sort descriptor for the subject column in the history list, as
 	// It can't be sorted by default (because it's bound to a PBGitCommit)
-	[[commitList tableColumnWithIdentifier:@"subject"] setSortDescriptorPrototype:[[NSSortDescriptor alloc] initWithKey:@"subject" ascending:YES]];
+	[[commitList tableColumnWithIdentifier:@"SubjectColumn"] setSortDescriptorPrototype:[[NSSortDescriptor alloc] initWithKey:@"subject" ascending:YES]];
 	// Add a menu that allows a user to select which columns to view
 	[[commitList headerView] setMenu:[self tableColumnMenu]];
 	[historySplitView setTopMin:58.0 andBottomMin:100.0];
@@ -82,26 +87,34 @@
 	[super awakeFromNib];
 }
 
-- (void) updateKeys
+- (void)updateKeys
 {
-	// Remove any references in the QLPanel
-	//[[QLPreviewPanel sharedPreviewPanel] setURLs:[NSArray array] currentIndex:0 preservingDisplayState:YES];
-	// We have to do this manually, as NSTreeController leaks memory?
-	//[treeController setSelectionIndexPaths:[NSArray array]];
+	PBGitCommit *lastObject = [[commitController selectedObjects] lastObject];
+	if (lastObject) {
+		if (![selectedCommit isEqual:lastObject]) {
+			selectedCommit = lastObject;
 
-	selectedCommit = [[commitController selectedObjects] lastObject];
+			BOOL isOnHeadBranch = [selectedCommit isOnHeadBranch];
+			[mergeButton setEnabled:!isOnHeadBranch];
+			[cherryPickButton setEnabled:!isOnHeadBranch];
+			[rebaseButton setEnabled:!isOnHeadBranch];
+		}
+	}
+	else {
+		[mergeButton setEnabled:NO];
+		[cherryPickButton setEnabled:NO];
+		[rebaseButton setEnabled:NO];
+	}
 
 	if (self.selectedCommitDetailsIndex == kHistoryTreeViewIndex) {
 		self.gitTree = selectedCommit.tree;
 		[self restoreFileBrowserSelection];
 	}
-	else // kHistoryDetailViewIndex
+	else {
+		// kHistoryDetailViewIndex
+		if (![self.webCommit isEqual:selectedCommit])
 		self.webCommit = selectedCommit;
-
-	BOOL isOnHeadBranch = [selectedCommit isOnHeadBranch];
-	[mergeButton setEnabled:!isOnHeadBranch];
-	[cherryPickButton setEnabled:!isOnHeadBranch];
-	[rebaseButton setEnabled:!isOnHeadBranch];
+	}
 }
 
 - (void) updateBranchFilterMatrix
@@ -138,6 +151,11 @@
 		return [arrangedObjects objectAtIndex:0];
 
 	return nil;
+}
+
+- (BOOL)isCommitSelected
+{
+	return [selectedCommit isEqual:[[commitController selectedObjects] lastObject]];
 }
 
 - (void) setSelectedCommitDetailsIndex:(int)detailsIndex
@@ -227,23 +245,26 @@
 		return;
 	}
 
-	if([(NSString *)context isEqualToString:@"updateCommitCount"] || [(NSString *)context isEqualToString:@"revisionListUpdating"]) {
-		[self updateStatus];
+	if ([(NSString *)context isEqualToString:@"branchFilterChange"]) {
+		[PBGitDefaults setBranchFilter:repository.currentBranchFilter];
+		[self updateBranchFilterMatrix];
 		return;
 	}
 
-	if([(NSString *)context isEqualToString:@"revisionListUpdatedGraph"]) {
+	if([(NSString *)context isEqualToString:@"updateCommitCount"] || [(NSString *)context isEqualToString:@"revisionListUpdating"]) {
+		[self updateStatus];
+
 		if ([repository.currentBranch isSimpleRef])
 			[self selectCommit:[repository shaForRef:[repository.currentBranch ref]]];
 		else
-			[self selectCommit:[[self firstCommit] realSha]];
+			[self selectCommit:[[self firstCommit] sha]];
 		return;
 	}
 
 	[super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
 }
 
-- (IBAction) openSelectedFile: sender
+- (IBAction) openSelectedFile:(id)sender
 {
 	NSArray* selectedFiles = [treeController selectedObjects];
 	if ([selectedFiles count] == 0)
@@ -281,6 +302,30 @@
 		[super keyDown: event];
 }
 
+// NSSearchField (actually textfields in general) prevent the normal Find operations from working. Setup custom actions for the
+// next and previous menuitems (in MainMenu.nib) so they will work when the search field is active. When searching for text in
+// a file make sure to call the Find panel's action method instead.
+- (IBAction)selectNext:(id)sender
+{
+	NSResponder *firstResponder = [[[self view] window] firstResponder];
+	if ([firstResponder isKindOfClass:[PBQLTextView class]]) {
+		[(PBQLTextView *)firstResponder performFindPanelAction:sender];
+		return;
+	}
+
+	[searchController selectNextResult];
+}
+- (IBAction)selectPrevious:(id)sender
+{
+	NSResponder *firstResponder = [[[self view] window] firstResponder];
+	if ([firstResponder isKindOfClass:[PBQLTextView class]]) {
+		[(PBQLTextView *)firstResponder performFindPanelAction:sender];
+		return;
+	}
+
+	[searchController selectPreviousResult];
+}
+
 - (void) copyCommitInfo
 {
 	PBGitCommit *commit = [[commitController selectedObjects] objectAtIndex:0];
@@ -292,6 +337,19 @@
 	[a declareTypes:[NSArray arrayWithObject:NSStringPboardType] owner:self];
 	[a setString:info forType: NSStringPboardType];
 	
+}
+
+- (void) copyCommitSHA
+{
+	PBGitCommit *commit = [[commitController selectedObjects] objectAtIndex:0];
+	if (!commit)
+		return;
+	NSString *info = [[commit realSha] substringWithRange:NSMakeRange(0, 7)];
+
+	NSPasteboard *a =[NSPasteboard generalPasteboard];
+	[a declareTypes:[NSArray arrayWithObject:NSStringPboardType] owner:self];
+	[a setString:info forType: NSStringPboardType];
+
 }
 
 - (IBAction) toggleQLPreviewPanel:(id)sender
@@ -339,7 +397,7 @@
 	}
 }
 
-- (IBAction) refresh: sender
+- (IBAction) refresh:(id)sender
 {
 	[repository forceUpdateRevisions];
 }
@@ -363,24 +421,31 @@
 
 - (void) scrollSelectionToTopOfViewFrom:(NSInteger)oldIndex
 {
-	if (oldIndex == NSIntegerMax)
+	if (oldIndex == NSNotFound)
 		oldIndex = 0;
 
 	NSInteger newIndex = [[commitController selectionIndexes] firstIndex];
 
 	if (newIndex > oldIndex) {
-		NSInteger visibleRows = floorf([[commitList superview] bounds].size.height / [commitList rowHeight]);
-		newIndex += visibleRows - 1;
+        CGFloat sviewHeight = [[commitList superview] bounds].size.height;
+        CGFloat rowHeight = [commitList rowHeight];
+		NSInteger visibleRows = roundf(sviewHeight / rowHeight );
+		newIndex += (visibleRows - 1);
 		if (newIndex >= [[commitController content] count])
 			newIndex = [[commitController content] count] - 1;
 	}
 
+    if (newIndex != oldIndex) {
+        commitList.useAdjustScroll = YES;
+    }
+
 	[commitList scrollRowToVisible:newIndex];
+    commitList.useAdjustScroll = NO;
 }
 
-- (NSArray *) selectedObjectsForSHA:(NSString *)commitSHA
+- (NSArray *) selectedObjectsForSHA:(PBGitSHA *)commitSHA
 {
-	NSPredicate *selection = [NSPredicate predicateWithFormat:@"realSha == %@", commitSHA];
+	NSPredicate *selection = [NSPredicate predicateWithFormat:@"sha == %@", commitSHA];
 	NSArray *selectedCommits = [[commitController content] filteredArrayUsingPredicate:selection];
 
 	if (([selectedCommits count] == 0) && [self firstCommit])
@@ -389,9 +454,9 @@
 	return selectedCommits;
 }
 
-- (void) selectCommit:(NSString *)commitSHA
+- (void)selectCommit:(PBGitSHA *)commitSHA
 {
-	if (!forceSelectionUpdate && [[selectedCommit realSha] isEqualToString:commitSHA])
+	if (!forceSelectionUpdate && [[[[commitController selectedObjects] lastObject] sha] isEqual:commitSHA])
 		return;
 
 	NSInteger oldIndex = [[commitController selectionIndexes] firstIndex];
@@ -399,8 +464,9 @@
 	NSArray *selectedCommits = [self selectedObjectsForSHA:commitSHA];
 	[commitController setSelectedObjects:selectedCommits];
 
-	if (repository.currentBranchFilter != kGitXSelectedBranchFilter)
-		[self scrollSelectionToTopOfViewFrom:oldIndex];
+	[self scrollSelectionToTopOfViewFrom:oldIndex];
+
+	forceSelectionUpdate = NO;
 }
 
 - (BOOL) hasNonlinearPath
@@ -408,17 +474,26 @@
 	return [commitController filterPredicate] || [[commitController sortDescriptors] count] > 0;
 }
 
-- (void) removeView
+- (void)closeView
 {
 	float position = [[[historySplitView subviews] objectAtIndex:0] frame].size.height;
 	[[NSUserDefaults standardUserDefaults] setFloat:position forKey:@"PBGitSplitViewPosition"];
 	[[NSUserDefaults standardUserDefaults] synchronize];
-	[webView close];
-	[commitController removeObserver:self forKeyPath:@"selection"];
-	[treeController removeObserver:self forKeyPath:@"selection"];
-	[repository removeObserver:self forKeyPath:@"currentBranch"];
 
-	[super removeView];
+	if (commitController) {
+		[commitController removeObserver:self forKeyPath:@"selection"];
+		[commitController removeObserver:self forKeyPath:@"arrangedObjects.@count"];
+		[treeController removeObserver:self forKeyPath:@"selection"];
+
+		[repository.revisionList removeObserver:self forKeyPath:@"isUpdating"];
+		[repository removeObserver:self forKeyPath:@"currentBranch"];
+		[repository removeObserver:self forKeyPath:@"refs"];
+		[repository removeObserver:self forKeyPath:@"currentBranchFilter"];
+	}
+
+	[webHistoryController closeView];
+
+	[super closeView];
 }
 
 #pragma mark Table Column Methods
@@ -441,14 +516,8 @@
 
 - (void)showCommitsFromTree:(id)sender
 {
-	// TODO: Enable this from webview as well!
-
-	NSMutableArray *filePaths = [NSMutableArray arrayWithObjects:@"HEAD", @"--", NULL];
-	[filePaths addObjectsFromArray:[sender representedObject]];
-
-	PBGitRevSpecifier *revSpec = [[PBGitRevSpecifier alloc] initWithParameters:filePaths];
-
-	repository.currentBranch = [repository addBranch:revSpec];
+	NSString *searchString = [(NSArray *)[sender representedObject] componentsJoinedByString:@" "];
+	[searchController setHistorySearch:searchString mode:kGitXPathSearchMode];
 }
 
 - (void)showInFinderAction:(id)sender
@@ -514,7 +583,7 @@
 	PBGitRef *headRef = [[repository headRef] ref];
 	NSString *headRefName = [headRef shortName];
 	NSString *diffTitle = [NSString stringWithFormat:@"Diff %@ with %@", multiple ? @"files" : @"file", headRefName];
-	BOOL isHead = [[selectedCommit realSha] isEqualToString:[repository headSHA]];
+	BOOL isHead = [[selectedCommit sha] isEqual:[repository headSHA]];
 	NSMenuItem *diffItem = [[NSMenuItem alloc] initWithTitle:diffTitle
 													  action:isHead ? nil : @selector(diffFilesAction:)
 											   keyEquivalent:@""];
@@ -602,10 +671,8 @@
 
 - (IBAction) rebase:(id)sender
 {
-	if (selectedCommit) {
-		PBGitRef *headRef = [[repository headRef] ref];
-		[repository rebaseBranch:headRef onRefish:selectedCommit];
-	}
+	if (selectedCommit)
+		[repository rebaseBranch:nil onRefish:selectedCommit];
 }
 
 #pragma mark -
@@ -649,7 +716,7 @@
 	PBGitTree *treeItem = (PBGitTree *)[[treeController selectedObjects] objectAtIndex:index];
 	NSURL *previewURL = [NSURL fileURLWithPath:[treeItem tmpFileNameForContents]];
 
-    return (<QLPreviewItem>)previewURL;
+    return (id <QLPreviewItem>)previewURL;
 }
 
 #pragma mark <QLPreviewPanelDelegate>

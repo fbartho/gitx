@@ -10,7 +10,6 @@
 #import "PBGitRevisionCell.h"
 #import "PBGitWindowController.h"
 #import "PBRepositoryDocumentController.h"
-#import "PBCLIProxy.h"
 #import "PBServicesController.h"
 #import "PBGitXProtocol.h"
 #import "PBPrefsWindowController.h"
@@ -20,7 +19,6 @@
 #import "PBCloneRepositoryPanel.h"
 
 @implementation ApplicationController
-@synthesize cliProxy;
 
 - (ApplicationController*)init
 {
@@ -28,13 +26,12 @@
 	[NSApp activateIgnoringOtherApps:YES];
 #endif
 
-	if(self = [super init]) {
-        if(![[NSBundle bundleWithPath:@"/System/Library/Frameworks/Quartz.framework/Frameworks/QuickLookUI.framework"] load])
-			if(![[NSBundle bundleWithPath:@"/System/Library/PrivateFrameworks/QuickLookUI.framework"] load])
-				NSLog(@"Could not load QuickLook");
+	if(!(self = [super init]))
+		return nil;
 
-		self.cliProxy = [PBCLIProxy new];
-	}
+	if(![[NSBundle bundleWithPath:@"/System/Library/Frameworks/Quartz.framework/Frameworks/QuickLookUI.framework"] load])
+		if(![[NSBundle bundleWithPath:@"/System/Library/PrivateFrameworks/QuickLookUI.framework"] load])
+			NSLog(@"Could not load QuickLook");
 
 	/* Value Transformers */
 	NSValueTransformer *transformer = [[PBNSURLPathUserDefaultsTransfomer alloc] init];
@@ -67,6 +64,11 @@
 - (void)applicationDidFinishLaunching:(NSNotification*)notification
 {
 	[[SUUpdater sharedUpdater] setSendsSystemProfile:YES];
+
+	// Make sure Git's SSH password requests get forwarded to our little UI tool:
+	setenv( "SSH_ASKPASS", [[[NSBundle mainBundle] pathForResource: @"gitx_askpasswd" ofType: @""] UTF8String], 1 );
+	setenv( "DISPLAY", "localhost:0", 1 );
+
 	[self registerServices];
 
     BOOL hasOpenedDocuments = NO;

@@ -65,10 +65,12 @@
 
 - (BOOL)hasBinaryHeader:(NSString*)contents
 {
-	if(!contents)
+	if (!contents)
 		return NO;
 
-	return [contents rangeOfString:@"\0" options:0 range:NSMakeRange(0, ([contents length] >= 8000) ? 7999 : [contents length])].location != NSNotFound;
+	return [contents rangeOfString:@"\0"
+						   options:0
+							 range:NSMakeRange(0, ([contents length] >= 8000) ? 7999 : [contents length])].location != NSNotFound;
 }
 
 - (BOOL)hasBinaryAttributes
@@ -216,9 +218,6 @@
 	
 	NSString* p = [handle readLine];
 	while (p.length > 0) {
-		if ([p isEqualToString:@"\r"])
-			break;
-
 		BOOL isLeaf = ([p characterAtIndex:p.length - 1] != '/');
 		if (!isLeaf)
 			p = [p substringToIndex:p.length -1];

@@ -11,6 +11,8 @@
 #import "PBGitCommitController.h"
 #import "Terminal.h"
 #import "PBCloneRepsitoryToSheet.h"
+#import "PBCommitHookFailedSheet.h"
+#import "PBGitXMessageSheet.h"
 #import "PBGitSidebarController.h"
 
 @implementation PBGitWindowController
@@ -33,7 +35,10 @@
 	NSLog(@"Window will close!");
 
 	if (sidebarController)
-		[sidebarController removeView];
+		[sidebarController closeView];
+
+	if (contentController)
+		[contentController removeObserver:self forKeyPath:@"status"];
 }
 
 - (BOOL)validateMenuItem:(NSMenuItem *)menuItem
@@ -105,18 +110,22 @@
 	[sidebarController selectCurrentBranch];
 }
 
+- (void)showCommitHookFailedSheet:(NSString *)messageText infoText:(NSString *)infoText commitController:(PBGitCommitController *)controller
+{
+	[PBCommitHookFailedSheet beginMessageSheetForWindow:[self window] withMessageText:messageText infoText:infoText commitController:controller];
+}
+
 - (void)showMessageSheet:(NSString *)messageText infoText:(NSString *)infoText
 {
-	[[NSAlert alertWithMessageText:messageText
-			 defaultButton:nil
-		       alternateButton:nil
-			   otherButton:nil
-	     informativeTextWithFormat:infoText] beginSheetModalForWindow: [self window] modalDelegate:self didEndSelector:nil contextInfo:nil];
+	[PBGitXMessageSheet beginMessageSheetForWindow:[self window] withMessageText:messageText infoText:infoText];
 }
 
 - (void)showErrorSheet:(NSError *)error
 {
-	[[NSAlert alertWithError:error] beginSheetModalForWindow: [self window] modalDelegate:self didEndSelector:nil contextInfo:nil];
+	if ([[error domain] isEqualToString:PBGitRepositoryErrorDomain])
+		[PBGitXMessageSheet beginMessageSheetForWindow:[self window] withError:error];
+	else
+		[[NSAlert alertWithError:error] beginSheetModalForWindow:[self window] modalDelegate:self didEndSelector:nil contextInfo:nil];
 }
 
 - (void)showErrorSheetTitle:(NSString *)title message:(NSString *)message arguments:(NSArray *)arguments output:(NSString *)output
@@ -186,6 +195,11 @@
 	}
 
 	[super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+}
+
+- (void)setHistorySearch:(NSString *)searchString mode:(NSInteger)mode
+{
+	[sidebarController setHistorySearch:searchString mode:mode];
 }
 
 

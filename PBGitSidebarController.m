@@ -15,6 +15,7 @@
 #import "NSOutlineViewExt.h"
 #import "PBAddRemoteSheet.h"
 #import "PBGitDefaults.h"
+#import "PBHistorySearchController.h"
 
 @interface PBGitSidebarController ()
 
@@ -57,6 +58,17 @@
 		[self selectStage];
 	else
 		[self selectCurrentBranch];
+}
+
+- (void)closeView
+{
+	[historyViewController closeView];
+	[commitViewController closeView];
+
+	[repository removeObserver:self forKeyPath:@"currentBranch"];
+	[repository removeObserver:self forKeyPath:@"branches"];
+
+	[super closeView];
 }
 
 - (void) observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
@@ -114,7 +126,7 @@
 	
 	PBSourceViewItem *item = nil;
 	for (PBSourceViewItem *it in items)
-		if (item = [it findRev:rev])
+		if ( (item = [it findRev:rev]) != nil )
 			break;
 	
 	if (!item) {
@@ -122,7 +134,7 @@
 		// Try to find the just added item again.
 		// TODO: refactor with above.
 		for (PBSourceViewItem *it in items)
-			if (item = [it findRev:rev])
+			if ( (item = [it findRev:rev]) != nil )
 				break;
 	}
 	
@@ -136,7 +148,7 @@
 {
 	PBSourceViewItem *foundItem = nil;
 	for (PBSourceViewItem *item in items)
-		if (foundItem = [item findRev:rev])
+		if ( (foundItem = [item findRev:rev]) != nil )
 			return foundItem;
 	return nil;
 }
@@ -171,6 +183,11 @@
 	PBSourceViewItem *parent = item.parent;
 	[parent removeChild:item];
 	[sourceView reloadData];
+}
+
+- (void)setHistorySearch:(NSString *)searchString mode:(NSInteger)mode
+{
+	[historyViewController.searchController setHistorySearch:searchString mode:mode];
 }
 
 #pragma mark NSOutlineView delegate methods

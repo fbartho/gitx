@@ -7,6 +7,7 @@ var Commit = function(obj) {
 
 	this.refs = obj.refs();
 	this.author_name = obj.author;
+	this.committer_name = obj.committer;
 	this.sha = obj.realSha();
 	this.parents = obj.parents;
 	this.subject = obj.subject;
@@ -32,16 +33,22 @@ var Commit = function(obj) {
 		}
 		this.header = this.raw.substring(0, messageStart);
 
-		var match = this.header.match(/\nauthor (.*) <(.*@.*|.*)> ([0-9].*)/);
-		if (!(match[2].match(/@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/)))
-			this.author_email = match[2];
+        if (typeof this.header !== 'undefined') {
+            var match = this.header.match(/\nauthor (.*) <(.*@.*|.*)> ([0-9].*)/);
+            if (typeof match !== 'undefined' && typeof match[2] !== 'undefined') {
+                if (!(match[2].match(/@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/)))
+                    this.author_email = match[2];
 
-		this.author_date = new Date(parseInt(match[3]) * 1000);
+				if (typeof match[3] !== 'undefined')
+                	this.author_date = new Date(parseInt(match[3]) * 1000);
 
-		match = this.header.match(/\ncommitter (.*) <(.*@.*|.*)> ([0-9].*)/);
-		this.committer_name = match[1];
-		this.committer_email = match[2];
-		this.committer_date = new Date(parseInt(match[3]) * 1000);		
+                match = this.header.match(/\ncommitter (.*) <(.*@.*|.*)> ([0-9].*)/);
+				if (typeof match[2] !== 'undefined')
+					this.committer_email = match[2];
+				if (typeof match[3] !== 'undefined')
+					this.committer_date = new Date(parseInt(match[3]) * 1000);
+            } 
+        }
 	}
 
 	this.reloadRefs = function() {
@@ -122,9 +129,6 @@ var gistie = function() {
 }
 
 var setGravatar = function(email, image) {
-	if (Controller && !Controller.isReachable_("www.gravatar.com"))
-		return;
-
 	if(Controller && !Controller.isFeatureEnabled_("gravatar")) {
 		image.src = "";
 		return;
@@ -157,7 +161,7 @@ var showRefs = function() {
 		refs.innerHTML = "";
 		for (var i = 0; i < commit.refs.length; i++) {
 			var ref = commit.refs[i];
-			refs.innerHTML += '<span class="refs ' + ref.type() + (commit.currentRef == ref.ref ? ' currentBranch' : '') + '">' + ref.shortName() + '</span>';
+			refs.innerHTML += '<span class="refs ' + ref.type() + (commit.currentRef == ref.ref ? ' currentBranch' : '') + '">' + ref.shortName() + '</span> ';
 		}
 	} else
 		refs.parentNode.style.display = "none";
@@ -209,7 +213,7 @@ var loadCommit = function(commitObject, currentRef) {
 		var newRow = $("commit_header").insertRow(-1);
 		newRow.innerHTML = "<td class='property_name'>Parent:</td><td>" +
 			"<a href='' onclick='selectCommit(this.innerHTML); return false;'>" +
-			commit.parents[i] + "</a></td>";
+			commit.parents[i].string + "</a></td>";
 	}
 
 	commit.notificationID = setTimeout(function() { 
@@ -221,6 +225,8 @@ var loadCommit = function(commitObject, currentRef) {
 }
 
 var showDiff = function() {
+
+	$("files").innerHTML = "";
 
 	// Callback for the diff highlighter. Used to generate a filelist
 	var newfile = function(name1, name2, id, mode_change, old_mode, new_mode) {
