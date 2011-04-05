@@ -411,7 +411,7 @@
 			break;
 		case kGitXPathSearchMode:
 			[searchArguments addObject:@"--"];
-			[searchArguments addObjectsFromArray:[searchString componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]];
+			[searchArguments addObjectsFromArray:[searchString componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]];
 			break;
 		default:
 			return;
