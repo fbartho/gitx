@@ -337,7 +337,7 @@
 		D8E3B38110DD4E2C001096A3 /* English */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = English; path = English.lproj/PBCreateTagSheet.xib; sourceTree = "<group>"; };
 		D8EB6168122F643E00FCCAF4 /* GitXRelativeDateFormatter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GitXRelativeDateFormatter.h; sourceTree = "<group>"; };
 		D8EB6169122F643E00FCCAF4 /* GitXRelativeDateFormatter.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GitXRelativeDateFormatter.m; sourceTree = "<group>"; };
-		D8F01C4A12182F19007F729F /* GitX.sdef */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.sdef; path = GitX.sdef; sourceTree = "<group>"; };
+		D8F01C4A12182F19007F729F /* GitX.sdef */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = GitX.sdef; sourceTree = "<group>"; };
 		D8F01D511218A164007F729F /* NSApplication+GitXScripting.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSApplication+GitXScripting.h"; sourceTree = "<group>"; };
 		D8F01D521218A164007F729F /* NSApplication+GitXScripting.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSApplication+GitXScripting.m"; sourceTree = "<group>"; };
 		D8F01D841218A406007F729F /* GitX.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = GitX.h; sourceTree = "<group>"; };
@@ -1164,7 +1164,6 @@
 				47DBDB6A0E94EF6500671A1E /* Preferences.xib in Resources */,
 				47DBDBB10E94F6CA00671A1E /* Updates.png in Resources */,
 				F569AE930F2CBD7C00C2FFA7 /* Credits.html in Resources */,
-				F5F7D0651062E7940072C81C /* UpdateKey.pem in Resources */,
 				F58DB56010566E3900CFDF4A /* PBGitSidebarView.xib in Resources */,
 				D85B939310E3D8B4007F3C28 /* PBCreateBranchSheet.xib in Resources */,
 				D889EB3110E6BCBB00F08413 /* PBCreateTagSheet.xib in Resources */,
@@ -1563,25 +1562,21 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_PREPROCESS = YES;
 				PREBINDING = NO;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 			};
 			name = Debug;
 		};
 		26FC0A8A0875C7B200E6366F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ARCHS = (
-					ppc,
-					i386,
-					x86_64,
-				);
+				ARCHS = "$(NATIVE_ARCH_ACTUAL)";
 				GCC_ENABLE_OBJC_GC = required;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INFOPLIST_PREFIX_HEADER = $PROJECT_TEMP_DIR/revision;
 				INFOPLIST_PREPROCESS = YES;
 				PREBINDING = NO;
-				SDKROOT = "$(DEVELOPER_SDK_DIR)/MacOSX10.5.sdk";
+				SDKROOT = "";
 			};
 			name = Release;
 		};
